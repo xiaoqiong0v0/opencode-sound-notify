@@ -16,8 +16,14 @@ const DEFAULT_SOUND = join(ASSET_DIR, "default.wav")
 const log: Logger = createLogger("sound-notify")
 
 const SAMPLE_CFG = `{
-  // 提示音文件路径，留空使用内置 default.wav
+  // 默认提示音文件路径，留空使用内置 default.wav
   "sound": "",
+  // 按事件单独指定提示音路径，key=事件名，value=wav文件路径
+  // 留空则使用默认 sound
+  "sounds": {
+    "session.error": "",
+    "permission.asked": ""
+  },
   // 触发提示音的事件列表
   "events": ["session.idle", "session.error", "permission.asked"],
   // 全局默认防抖间隔(ms)，未单独配置的事件使用此值
@@ -35,6 +41,7 @@ const SAMPLE_CFG = `{
 
 interface Cfg {
   sound?: string
+  sounds?: Record<string, string>
   events?: string[]
   defaultDebounceMs?: number
   debounceMs?: Record<string, number>
@@ -61,7 +68,6 @@ const T = (key: string, params?: Record<string, string>): string => {
 }
 
 let cfg: Cfg = {}
-let soundPath = DEFAULT_SOUND
 
 function readJsonc(path: string): Record<string, unknown> {
   const raw = readFileSync(path, "utf-8").replace(/\/\/.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "")
@@ -77,12 +83,12 @@ function loadCfg(): void {
   const raw = readJsonc(CONFIG_PATH)
   cfg = {
     sound: (raw.sound as string) || "",
+    sounds: raw.sounds as Record<string, string> | undefined,
     events: raw.events as string[] | undefined,
     defaultDebounceMs: (raw.defaultDebounceMs as number) || 30000,
     debounceMs: raw.debounceMs as Record<string, number> | undefined,
     enabled: raw.enabled !== false,
   }
-  soundPath = cfg.sound && existsSync(cfg.sound) ? cfg.sound : DEFAULT_SOUND
   LANG = (raw.lang as string) === "zh" ? "zh" : "en"
 }
 
@@ -108,12 +114,22 @@ function getPlayerArgs(sound: string): string[] | null {
   }
 }
 
-function play(): Promise<boolean> {
-  if (!existsSync(soundPath)) {
-    log.error(T("no_sound_file", { path: soundPath }))
+function resolveSound(eventType: string): string {
+  const custom = cfg.sounds?.[eventType]
+  if (custom && existsSync(custom)) return custom
+  if (cfg.sound && existsSync(cfg.sound)) return cfg.sound
+  const builtin = join(ASSET_DIR, `${eventType === "session.idle" ? "default" : eventType.replace("session.", "")}.wav`)
+  if (existsSync(builtin)) return builtin
+  return DEFAULT_SOUND
+}
+
+function play(eventType: string): Promise<boolean> {
+  const path = resolveSound(eventType)
+  if (!existsSync(path)) {
+    log.error(T("no_sound_file", { path }))
     return Promise.resolve(false)
   }
-  const args = getPlayerArgs(soundPath)
+  const args = getPlayerArgs(path)
   if (!args) {
     log.error(T("unsupported_platform", { platform: process.platform }))
     return Promise.resolve(false)
@@ -144,7 +160,7 @@ export const SoundNotify = async () => {
   return {
     event: async ({ event }: { event: { type: string } }) => {
       if (shouldPlay(event.type)) {
-        play()
+        play(event.type)
       }
     },
   }

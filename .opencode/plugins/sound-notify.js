@@ -11,8 +11,14 @@ const ASSET_DIR = join(__dirname, "..", "assets");
 const DEFAULT_SOUND = join(ASSET_DIR, "default.wav");
 const log = createLogger("sound-notify");
 const SAMPLE_CFG = `{
-  // 提示音文件路径，留空使用内置 default.wav
+  // 默认提示音文件路径，留空使用内置 default.wav
   "sound": "",
+  // 按事件单独指定提示音路径，key=事件名，value=wav文件路径
+  // 留空则使用默认 sound
+  "sounds": {
+    "session.error": "",
+    "permission.asked": ""
+  },
   // 触发提示音的事件列表
   "events": ["session.idle", "session.error", "permission.asked"],
   // 全局默认防抖间隔(ms)，未单独配置的事件使用此值
@@ -42,7 +48,6 @@ const T = (key, params) => {
     return Object.entries(params).reduce((s, [k, v]) => s.replace(`{${k}}`, v), t);
 };
 let cfg = {};
-let soundPath = DEFAULT_SOUND;
 function readJsonc(path) {
     const raw = readFileSync(path, "utf-8").replace(/\/\/.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "");
     return JSON.parse(raw);
@@ -57,12 +62,12 @@ function loadCfg() {
     const raw = readJsonc(CONFIG_PATH);
     cfg = {
         sound: raw.sound || "",
+        sounds: raw.sounds,
         events: raw.events,
         defaultDebounceMs: raw.defaultDebounceMs || 30000,
         debounceMs: raw.debounceMs,
         enabled: raw.enabled !== false,
     };
-    soundPath = cfg.sound && existsSync(cfg.sound) ? cfg.sound : DEFAULT_SOUND;
     LANG = raw.lang === "zh" ? "zh" : "en";
 }
 try {
@@ -89,12 +94,24 @@ function getPlayerArgs(sound) {
             return null;
     }
 }
-function play() {
-    if (!existsSync(soundPath)) {
-        log.error(T("no_sound_file", { path: soundPath }));
+function resolveSound(eventType) {
+    const custom = cfg.sounds?.[eventType];
+    if (custom && existsSync(custom))
+        return custom;
+    if (cfg.sound && existsSync(cfg.sound))
+        return cfg.sound;
+    const builtin = join(ASSET_DIR, `${eventType === "session.idle" ? "default" : eventType.replace("session.", "")}.wav`);
+    if (existsSync(builtin))
+        return builtin;
+    return DEFAULT_SOUND;
+}
+function play(eventType) {
+    const path = resolveSound(eventType);
+    if (!existsSync(path)) {
+        log.error(T("no_sound_file", { path }));
         return Promise.resolve(false);
     }
-    const args = getPlayerArgs(soundPath);
+    const args = getPlayerArgs(path);
     if (!args) {
         log.error(T("unsupported_platform", { platform: process.platform }));
         return Promise.resolve(false);
@@ -124,7 +141,7 @@ export const SoundNotify = async () => {
     return {
         event: async ({ event }) => {
             if (shouldPlay(event.type)) {
-                play();
+                play(event.type);
             }
         },
     };
