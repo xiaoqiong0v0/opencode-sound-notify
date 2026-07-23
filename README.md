@@ -1,0 +1,77 @@
+# opencode-sound-notify
+
+OpenCode 插件：在会话事件触发时播放提示音，让用户无需盯着屏幕也能感知状态变化。
+
+## 安装
+
+```bash
+npm install @xiaoqiong0v0/opencode-sound-notify
+```
+
+在 `opencode.json` 中添加：
+
+```json
+{
+  "plugin": ["@xiaoqiong0v0/opencode-sound-notify"]
+}
+```
+
+## 配置
+
+首次加载自动生成配置文件 `~/.config/opencode/sound-notify.jsonc`：
+
+```jsonc
+{
+  // 提示音文件路径，留空使用内置 default.wav
+  "sound": "",
+  // 触发提示音的事件列表
+  "events": ["session.idle", "session.error", "permission.asked"],
+  // 全局默认防抖间隔(ms)，未单独配置的事件使用此值
+  "defaultDebounceMs": 30000,
+  // 按事件单独配置防抖间隔(ms)，覆盖 defaultDebounceMs
+  "debounceMs": {
+    "session.idle": 10000,
+    "session.error": 5000
+  },
+  // 语言: "zh" 或 "en"
+  "lang": "en",
+  // 是否启用
+  "enabled": true
+}
+```
+
+| 字段 | 默认值 | 说明 |
+|------|--------|------|
+| `sound` | 内置 `assets/default.wav` | 自定义 .wav 路径 |
+| `events` | `["session.idle", "session.error", "permission.asked"]` | 触发事件列表 |
+| `defaultDebounceMs` | `30000` | 全局默认防抖间隔 |
+| `debounceMs` | `{}` | 按事件单独配置，key=事件名，value=防抖间隔(ms) |
+| `lang` | `"en"` | 语言设置 |
+| `enabled` | `true` | 总开关 |
+
+## 支持的事件
+
+| 事件 | 说明 |
+|------|------|
+| `session.idle` | 会话空闲（任务完成） |
+| `session.error` | 会话出错 |
+| `permission.asked` | 权限询问 |
+| `session.created` | 新会话创建 |
+| `session.updated` | 会话更新 |
+| `session.status` | 会话状态变更 |
+
+## 测试
+
+通过 `sound_notify` 工具验证配置是否正常：
+
+```
+sound_notify action=test
+```
+
+## 平台支持
+
+| 平台 | 播放方式 |
+|------|----------|
+| Windows | PowerShell SoundPlayer |
+| macOS | `afplay` |
+| Linux | `paplay` (PulseAudio) / `aplay` (ALSA) |

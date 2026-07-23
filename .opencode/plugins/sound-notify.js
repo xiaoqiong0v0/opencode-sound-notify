@@ -1,0 +1,131 @@
+import { spawn } from "node:child_process";
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+import createLogger from "@xiaoqiong0v0/opencode-plugin-logger";
+const CONFIG_DIR = process.env.HOME || process.env.USERPROFILE || "";
+const CONFIG_PATH = join(CONFIG_DIR, ".config/opencode", "sound-notify.jsonc");
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const ASSET_DIR = join(__dirname, "..", "assets");
+const DEFAULT_SOUND = join(ASSET_DIR, "default.wav");
+const log = createLogger("sound-notify");
+const SAMPLE_CFG = `{
+  // 提示音文件路径，留空使用内置 default.wav
+  "sound": "",
+  // 触发提示音的事件列表
+  "events": ["session.idle", "session.error", "permission.asked"],
+  // 全局默认防抖间隔(ms)，未单独配置的事件使用此值
+  "defaultDebounceMs": 30000,
+  // 按事件单独配置防抖间隔(ms)，覆盖 defaultDebounceMs
+  "debounceMs": {
+    "permission.asked": 5000
+  },
+  // 语言: "zh" 或 "en"
+  "lang": "en",
+  // 是否启用
+  "enabled": true
+}
+`;
+let LANG = "en";
+const TX = {
+    init_failed: { zh: "初始化失败，使用默认配置", en: "Init failed, using defaults" },
+    play_error: { zh: "播放失败", en: "Playback failed" },
+    unsupported_platform: { zh: "不支持的播放平台: {platform}", en: "Unsupported platform: {platform}" },
+    no_sound_file: { zh: "声音文件不存在: {path}", en: "Sound file not found: {path}" },
+};
+const T = (key, params) => {
+    const entry = TX[key] || { zh: key, en: key };
+    const t = LANG === "zh" ? entry.zh : entry.en;
+    if (!params)
+        return t;
+    return Object.entries(params).reduce((s, [k, v]) => s.replace(`{${k}}`, v), t);
+};
+let cfg = {};
+let soundPath = DEFAULT_SOUND;
+function readJsonc(path) {
+    const raw = readFileSync(path, "utf-8").replace(/\/\/.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "");
+    return JSON.parse(raw);
+}
+function loadCfg() {
+    if (!existsSync(CONFIG_PATH)) {
+        const dir = dirname(CONFIG_PATH);
+        if (!existsSync(dir))
+            mkdirSync(dir, { recursive: true });
+        writeFileSync(CONFIG_PATH, SAMPLE_CFG, "utf-8");
+    }
+    const raw = readJsonc(CONFIG_PATH);
+    cfg = {
+        sound: raw.sound || "",
+        events: raw.events,
+        defaultDebounceMs: raw.defaultDebounceMs || 30000,
+        debounceMs: raw.debounceMs,
+        enabled: raw.enabled !== false,
+    };
+    soundPath = cfg.sound && existsSync(cfg.sound) ? cfg.sound : DEFAULT_SOUND;
+    LANG = raw.lang === "zh" ? "zh" : "en";
+}
+try {
+    loadCfg();
+}
+catch (e) {
+    log.error(T("init_failed"), e instanceof Error ? e : Error(String(e)));
+}
+const eventTimestamps = new Map();
+function getPlayerArgs(sound) {
+    switch (process.platform) {
+        case "win32":
+            return ["powershell", "-NoProfile", "-Command", `(New-Object System.Media.SoundPlayer '${sound}').PlaySync()`];
+        case "darwin":
+            return ["afplay", sound];
+        case "linux": {
+            if (existsSync("/usr/bin/paplay"))
+                return ["paplay", sound];
+            if (existsSync("/usr/bin/aplay"))
+                return ["aplay", sound];
+            return null;
+        }
+        default:
+            return null;
+    }
+}
+function play() {
+    if (!existsSync(soundPath)) {
+        log.error(T("no_sound_file", { path: soundPath }));
+        return Promise.resolve(false);
+    }
+    const args = getPlayerArgs(soundPath);
+    if (!args) {
+        log.error(T("unsupported_platform", { platform: process.platform }));
+        return Promise.resolve(false);
+    }
+    const [cmd, ...cmdArgs] = args;
+    const ps = spawn(cmd, cmdArgs, { stdio: "ignore", windowsHide: true });
+    return new Promise((resolve) => {
+        ps.on("error", (err) => { log.error(T("play_error"), err); resolve(false); });
+        ps.on("close", (code) => { resolve(code === 0); });
+    });
+}
+function shouldPlay(eventType) {
+    if (!cfg.enabled)
+        return false;
+    if (!cfg.events?.includes(eventType))
+        return false;
+    const now = Date.now();
+    const debounceMs = cfg.debounceMs?.[eventType] ?? cfg.defaultDebounceMs ?? 30000;
+    const last = eventTimestamps.get(eventType) || 0;
+    if (now - last < debounceMs)
+        return false;
+    eventTimestamps.set(eventType, now);
+    return true;
+}
+export const SoundNotify = async () => {
+    log.loaded();
+    return {
+        event: async ({ event }) => {
+            if (shouldPlay(event.type)) {
+                play();
+            }
+        },
+    };
+};
