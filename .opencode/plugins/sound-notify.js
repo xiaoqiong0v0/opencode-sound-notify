@@ -1,3 +1,4 @@
+import { tool } from "@opencode-ai/plugin";
 import { spawn } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { join, dirname } from "node:path";
@@ -36,11 +37,14 @@ const SAMPLE_CFG = `{
 }
 `;
 let LANG = "en";
+let muted = false;
 const TX = {
     init_failed: { zh: "初始化失败，使用默认配置", en: "Init failed, using defaults" },
     play_error: { zh: "播放失败", en: "Playback failed" },
     unsupported_platform: { zh: "不支持的播放平台: {platform}", en: "Unsupported platform: {platform}" },
     no_sound_file: { zh: "声音文件不存在: {path}", en: "Sound file not found: {path}" },
+    muted_on: { zh: "声音已关闭", en: "Sound muted" },
+    muted_off: { zh: "声音已开启", en: "Sound unmuted" },
 };
 const T = (key, params) => {
     const entry = TX[key] || { zh: key, en: key };
@@ -129,6 +133,8 @@ function play(eventType) {
     });
 }
 function shouldPlay(eventType) {
+    if (muted)
+        return false;
     if (!cfg.enabled)
         return false;
     if (!cfg.events?.includes(eventType))
@@ -154,6 +160,25 @@ export const SoundNotify = async () => {
             if (shouldPlay(event.type)) {
                 play(event.type);
             }
+        },
+        tool: {
+            sound_toggle: tool({
+                description: T("muted_off"),
+                args: {
+                    action: tool.schema.enum(["toggle", "on", "off"]).optional().describe("toggle/on/off"),
+                },
+                execute: async ({ action }) => {
+                    if (action === "on")
+                        muted = false;
+                    else if (action === "off")
+                        muted = true;
+                    else
+                        muted = !muted;
+                    const status = T(muted ? "muted_on" : "muted_off");
+                    const cmd = muted ? "off" : "on";
+                    return `${status} (下次输入 sound_toggle action=${cmd} 可恢复)`;
+                },
+            }),
         },
     };
 };
