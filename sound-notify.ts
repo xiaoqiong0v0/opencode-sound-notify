@@ -212,3 +212,5 @@ export const SoundNotify = async () => {
     },
   }
 }
+
+export default SoundNotify
