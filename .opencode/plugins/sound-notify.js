@@ -23,6 +23,8 @@ const SAMPLE_CFG = `{
   "events": ["session.idle", "session.error", "permission.asked"],
   // 全局默认防抖间隔(ms)，未单独配置的事件使用此值
   "defaultDebounceMs": 30000,
+  // 全局最小间隔(ms)，所有声音播放不能低于此间隔，覆盖单独配置
+  "minIntervalMs": 3000,
   // 按事件单独配置防抖间隔(ms)，覆盖 defaultDebounceMs
   "debounceMs": {
     "permission.asked": 5000
@@ -64,6 +66,7 @@ function loadCfg() {
         sound: raw.sound || "",
         sounds: raw.sounds,
         events: raw.events,
+        minIntervalMs: raw.minIntervalMs ?? 3000,
         defaultDebounceMs: raw.defaultDebounceMs || 30000,
         debounceMs: raw.debounceMs,
         enabled: raw.enabled !== false,
@@ -77,6 +80,7 @@ catch (e) {
     log.error(T("init_failed"), e instanceof Error ? e : Error(String(e)));
 }
 const eventTimestamps = new Map();
+let globalLastPlay = 0;
 function getPlayerArgs(sound) {
     switch (process.platform) {
         case "win32":
@@ -130,11 +134,17 @@ function shouldPlay(eventType) {
     if (!cfg.events?.includes(eventType))
         return false;
     const now = Date.now();
+    const minMs = cfg.minIntervalMs || 0;
     const debounceMs = cfg.debounceMs?.[eventType] ?? cfg.defaultDebounceMs ?? 30000;
+    const effective = minMs > debounceMs ? minMs : debounceMs;
+    // 全局间隔检查：任何声音播放后 minIntervalMs 内都不再响应
+    if (minMs > 0 && now - globalLastPlay < minMs)
+        return false;
     const last = eventTimestamps.get(eventType) || 0;
-    if (now - last < debounceMs)
+    if (now - last < effective)
         return false;
     eventTimestamps.set(eventType, now);
+    globalLastPlay = now;
     return true;
 }
 export const SoundNotify = async () => {
