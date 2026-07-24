@@ -78,11 +78,11 @@ npm install @xiaoqiong0v0/opencode-sound-notify
 
 ## 运行时开关
 
-通过 AI 对话即可开关声音（不写配置，重启恢复）：
+不写配置，重启恢复。支持三种方式：
 
-- `关掉声音` / `mute` — 静音
-- `开启声音` / `unmute` — 恢复
-- `声音开关` / `toggle` — 切换
+1. **对话**：对 AI 说"关声音" / "mute" / "开声音" / "声音开关"
+2. **命令**：在 TUI 输入 `/sound-toggle on|off|toggle`
+3. **工具**：AI 自动调用 `sound_toggle`
 
 ## 平台支持
 
