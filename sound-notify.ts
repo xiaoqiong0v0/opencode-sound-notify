@@ -65,8 +65,9 @@ const TX: Record<string, TxEntry> = {
   no_sound_file:         { zh: "声音文件不存在: {path}", en: "Sound file not found: {path}" },
   muted_on:              { zh: "声音已关闭", en: "Sound muted" },
   muted_off:             { zh: "声音已开启", en: "Sound unmuted" },
-  mute_desc:             { zh: "开/关提示音", en: "Toggle notification sound" },
-  mute_template:         { zh: "用户想要切换声音状态。调用 sound_toggle 工具。", en: "User wants to toggle sound. Call sound_toggle tool." },
+  mute_desc:             { zh: "控制提示音开关：action=on 开启，action=off 关闭，action=toggle 切换", en: "Control notification sound: action=on to enable, action=off to disable, action=toggle to switch" },
+  mute_template:         { zh: "用户想要切换声音状态。调用 sound_toggle 工具，action 参数：on=开启，off=关闭，toggle=切换。", en: "User wants to control sound. Call sound_toggle tool: action=on to enable, action=off to disable, action=toggle to switch." },
+  mute_action:           { zh: "on 开启声音 off 关闭声音 toggle 切换", en: "on enable off disable toggle switch" },
 }
 
 const T = (key: string, params?: Record<string, string>): string => {
@@ -107,6 +108,7 @@ try { loadCfg() } catch (e: unknown) {
 }
 
 const eventTimestamps = new Map<string, number>()
+const subSessions = new Set<string>()
 let globalLastPlay = 0
 
 function getPlayerArgs(sound: string): string[] | null {
@@ -191,16 +193,21 @@ export const SoundNotify = async () => {
         log.error("command registration failed", e instanceof Error ? e : Error(String(e)))
       }
     },
-    event: async ({ event }: { event: { type: string } }) => {
-      if (shouldPlay(event.type)) {
-        play(event.type)
+    event: async ({ event }: { event: { type: string; properties?: Record<string, unknown> } }) => {
+      if (event.type === "session.created") {
+        const info = event.properties?.info as Record<string, unknown> | undefined
+        if (info?.parentID) subSessions.add(info.id as string)
+        return
       }
+      const sid = event.properties?.sessionID as string | undefined
+      if (sid && subSessions.has(sid)) return
+      if (shouldPlay(event.type)) play(event.type)
     },
     tool: {
       sound_toggle: tool({
         description: T("mute_desc"),
         args: {
-          action: tool.schema.enum(["on", "off", "toggle"]).optional().describe("on=开启 off=关闭 toggle=切换"),
+          action: tool.schema.enum(["on", "off", "toggle"]).describe(T("mute_action")),
         },
         execute: async ({ action }: { action?: string }) => {
           if (action === "on") muted = false
