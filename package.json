@@ -1,6 +1,6 @@
 {
   "name": "@xiaoqiong0v0/opencode-sound-notify",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "type": "module",
   "description": "OpenCode plugin: play notification sounds on session events (idle, error, permission asked).",
   "files": [

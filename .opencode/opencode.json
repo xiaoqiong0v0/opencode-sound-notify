@@ -1,0 +1,6 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugin": [
+    "@xiaoqiong0v0/opencode-sound-notify"
+  ]
+}

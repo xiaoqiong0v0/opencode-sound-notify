@@ -101,7 +101,8 @@ const eventTimestamps = new Map<string, number>()
 function getPlayerArgs(sound: string): string[] | null {
   switch (process.platform) {
     case "win32":
-      return ["powershell", "-NoProfile", "-Command", `(New-Object System.Media.SoundPlayer '${sound}').PlaySync()`]
+      return ["powershell", "-NoProfile", "-Command",
+        `(New-Object System.Media.SoundPlayer '${sound.replace(/'/g, "''")}').PlaySync()`]
     case "darwin":
       return ["afplay", sound]
     case "linux": {
