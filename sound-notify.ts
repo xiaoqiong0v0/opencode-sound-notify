@@ -65,6 +65,8 @@ const TX: Record<string, TxEntry> = {
   no_sound_file:         { zh: "声音文件不存在: {path}", en: "Sound file not found: {path}" },
   muted_on:              { zh: "声音已关闭", en: "Sound muted" },
   muted_off:             { zh: "声音已开启", en: "Sound unmuted" },
+  mute_desc:             { zh: "开/关提示音", en: "Toggle notification sound" },
+  mute_template:         { zh: "用户想要切换声音状态。调用 sound_toggle 工具。", en: "User wants to toggle sound. Call sound_toggle tool." },
 }
 
 const T = (key: string, params?: Record<string, string>): string => {
@@ -175,6 +177,14 @@ function shouldPlay(eventType: string): boolean {
 export const SoundNotify = async () => {
   log.loaded()
   return {
+    config: async (config: Record<string, unknown>) => {
+      const commands = (config.command as Record<string, unknown>) ?? {}
+      commands["sound-toggle"] = {
+        description: T("mute_desc"),
+        template: T("mute_template"),
+      }
+      config.command = commands
+    },
     event: async ({ event }: { event: { type: string } }) => {
       if (shouldPlay(event.type)) {
         play(event.type)
@@ -182,17 +192,15 @@ export const SoundNotify = async () => {
     },
     tool: {
       sound_toggle: tool({
-        description: T("muted_off"),
+        description: T("mute_desc"),
         args: {
-          action: tool.schema.enum(["toggle", "on", "off"]).optional().describe("toggle/on/off"),
+          action: tool.schema.enum(["on", "off", "toggle"]).optional().describe("on=开启 off=关闭 toggle=切换"),
         },
         execute: async ({ action }: { action?: string }) => {
           if (action === "on") muted = false
           else if (action === "off") muted = true
           else muted = !muted
-          const status = T(muted ? "muted_on" : "muted_off")
-          const cmd = muted ? "off" : "on"
-          return `${status} (下次输入 sound_toggle action=${cmd} 可恢复)`
+          return T(muted ? "muted_on" : "muted_off")
         },
       }),
     },

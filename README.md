@@ -33,6 +33,8 @@ npm install @xiaoqiong0v0/opencode-sound-notify
   "events": ["session.idle", "session.error", "permission.asked"],
   // 全局默认防抖间隔(ms)，未单独配置的事件使用此值
   "defaultDebounceMs": 30000,
+  // 全局最小间隔(ms)，所有声音播放不能低于此间隔，覆盖单独配置
+  "minIntervalMs": 3000,
   // 按事件单独配置防抖间隔(ms)，覆盖 defaultDebounceMs
   "debounceMs": {
     "permission.asked": 5000
@@ -50,6 +52,7 @@ npm install @xiaoqiong0v0/opencode-sound-notify
 | `sounds` | `{}` | 按事件单独配置，key=事件名，value=wav 路径 |
 | `events` | `["session.idle", "session.error", "permission.asked"]` | 触发事件列表 |
 | `defaultDebounceMs` | `30000` | 全局默认防抖间隔 |
+| `minIntervalMs` | `3000` | 全局最小间隔，所有声音不能小于此值，设为 0 关闭 |
 | `debounceMs` | `{}` | 按事件单独配置，key=事件名，value=防抖间隔(ms) |
 | `lang` | `"en"` | 语言设置 |
 | `enabled` | `true` | 总开关 |
@@ -73,13 +76,13 @@ npm install @xiaoqiong0v0/opencode-sound-notify
 | `session.updated` | 会话更新 |
 | `session.status` | 会话状态变更 |
 
-## 测试
+## 运行时开关
 
-通过 `sound_notify` 工具验证配置是否正常：
+通过 AI 对话即可开关声音（不写配置，重启恢复）：
 
-```
-sound_notify action=test
-```
+- `关掉声音` / `mute` — 静音
+- `开启声音` / `unmute` — 恢复
+- `声音开关` / `toggle` — 切换
 
 ## 平台支持
 
