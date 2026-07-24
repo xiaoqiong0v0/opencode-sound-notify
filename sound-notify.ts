@@ -178,12 +178,18 @@ export const SoundNotify = async () => {
   log.loaded()
   return {
     config: async (config: Record<string, unknown>) => {
-      const commands = (config.command as Record<string, unknown>) ?? {}
-      commands["sound-toggle"] = {
-        description: T("mute_desc"),
-        template: T("mute_template"),
+      log.hook("config", "register command sound-toggle")
+      try {
+        const commands = (config.command as Record<string, unknown>) ?? {}
+        commands["sound-toggle"] = {
+          description: T("mute_desc"),
+          template: T("mute_template"),
+        }
+        config.command = commands
+        log.info("sound-toggle command registered")
+      } catch (e: unknown) {
+        log.error("command registration failed", e instanceof Error ? e : Error(String(e)))
       }
-      config.command = commands
     },
     event: async ({ event }: { event: { type: string } }) => {
       if (shouldPlay(event.type)) {
