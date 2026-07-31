@@ -67,7 +67,10 @@ const TX: Record<string, TxEntry> = {
   muted_off:             { zh: "声音已开启", en: "Sound unmuted" },
   mute_desc:             { zh: "控制提示音开关：action=on 开启，action=off 关闭，action=toggle 切换", en: "Control notification sound: action=on to enable, action=off to disable, action=toggle to switch" },
   mute_template:         { zh: "用户想要切换声音状态。调用 sound_toggle 工具，action 参数：on=开启，off=关闭，toggle=切换。", en: "User wants to control sound. Call sound_toggle tool: action=on to enable, action=off to disable, action=toggle to switch." },
-  mute_action:           { zh: "on 开启声音 off 关闭声音 toggle 切换", en: "on enable off disable toggle switch" },
+  mute_action:           { zh: "on 开启 off 关闭 toggle 切换", en: "on enable off disable toggle switch" },
+  mute_save:             { zh: "save=true 同时写入配置文件持久化", en: "save=true also persist to config file" },
+  save_ok:               { zh: "已保存到配置文件 {path}", en: "Saved to config {path}" },
+  save_fail:             { zh: "保存失败: {msg}", en: "Save failed: {msg}" },
 }
 
 const T = (key: string, params?: Record<string, string>): string => {
@@ -101,6 +104,13 @@ function loadCfg(): void {
     enabled: raw.enabled !== false,
   }
   LANG = (raw.lang as string) === "zh" ? "zh" : "en"
+}
+
+function persistEnabled(enabled: boolean): void {
+  if (!existsSync(CONFIG_PATH)) return
+  const raw = readFileSync(CONFIG_PATH, "utf-8")
+  const updated = raw.replace(/"enabled"\s*:\s*(true|false)/, `"enabled": ${enabled}`)
+  writeFileSync(CONFIG_PATH, updated, "utf-8")
 }
 
 try { loadCfg() } catch (e: unknown) {
@@ -208,11 +218,28 @@ export const SoundNotify = async () => {
         description: T("mute_desc"),
         args: {
           action: tool.schema.enum(["on", "off", "toggle"]).describe(T("mute_action")),
+          save: tool.schema.boolean().optional().describe(T("mute_save")),
         },
-        execute: async ({ action }: { action?: string }) => {
-          if (action === "on") muted = false
-          else if (action === "off") muted = true
-          else muted = !muted
+        execute: async ({ action, save }: { action: "on" | "off" | "toggle"; save?: boolean }) => {
+          if (action === "on") {
+            muted = false
+            cfg.enabled = true
+          } else if (action === "off") {
+            muted = true
+          } else if (action === "toggle") {
+            muted = !muted
+          }
+          if (save) {
+            try {
+              persistEnabled(!muted)
+              cfg.enabled = !muted
+              return T(muted ? "muted_on" : "muted_off") + " | " + T("save_ok", { path: CONFIG_PATH })
+            } catch (e: unknown) {
+              const msg = e instanceof Error ? e.message : String(e)
+              log.error(T("save_fail", { msg }))
+              return T("save_fail", { msg })
+            }
+          }
           return T(muted ? "muted_on" : "muted_off")
         },
       }),
