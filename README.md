@@ -39,6 +39,8 @@ npm install @xiaoqiong0v0/opencode-sound-notify
   "debounceMs": {
     "permission.asked": 5000
   },
+  // 子任务(sub-session)中仍触发提示音的事件列表，默认仅权限请求
+  "childEvents": ["permission.asked"],
   // 语言: "zh" 或 "en"
   "lang": "en",
   // 是否启用
@@ -54,6 +56,7 @@ npm install @xiaoqiong0v0/opencode-sound-notify
 | `defaultDebounceMs` | `30000` | 全局默认防抖间隔 |
 | `minIntervalMs` | `3000` | 全局最小间隔，所有声音不能小于此值，设为 0 关闭 |
 | `debounceMs` | `{}` | 按事件单独配置，key=事件名，value=防抖间隔(ms) |
+| `childEvents` | `["permission.asked"]` | 子任务中仍触发提示音的事件列表，其他事件静默 |
 | `lang` | `"en"` | 语言设置 |
 | `enabled` | `true` | 总开关 |
 
@@ -63,7 +66,7 @@ npm install @xiaoqiong0v0/opencode-sound-notify
 |------|----------|------|
 | `session.idle` | `assets/default.wav` | 默认 |
 | `session.error` | `assets/error.wav` | 短促蜂鸣 |
-| `permission.asked` | `assets/ask.wav` | 双音提醒 |
+| `permission.asked` | `assets/permission.asked.wav` | 双音提醒 |
 
 ## 支持的事件
 

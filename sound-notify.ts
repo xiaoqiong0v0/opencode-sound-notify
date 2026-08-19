@@ -35,6 +35,8 @@ const SAMPLE_CFG = `{
   "debounceMs": {
     "permission.asked": 5000
   },
+  // 子任务(sub-session)中仍触发提示音的事件列表，默认仅权限请求
+  "childEvents": ["permission.asked"],
   // 语言: "zh" 或 "en"
   "lang": "en",
   // 是否启用
@@ -49,6 +51,7 @@ interface Cfg {
   minIntervalMs?: number
   defaultDebounceMs?: number
   debounceMs?: Record<string, number>
+  childEvents?: string[]
   enabled?: boolean
 }
 
@@ -101,6 +104,7 @@ function loadCfg(): void {
     minIntervalMs: (raw.minIntervalMs as number) ?? 3000,
     defaultDebounceMs: (raw.defaultDebounceMs as number) || 30000,
     debounceMs: raw.debounceMs as Record<string, number> | undefined,
+    childEvents: (raw.childEvents as string[]) || ["permission.asked"],
     enabled: raw.enabled !== false,
   }
   LANG = (raw.lang as string) === "zh" ? "zh" : "en"
@@ -210,7 +214,7 @@ export const SoundNotify = async () => {
         return
       }
       const sid = event.properties?.sessionID as string | undefined
-      if (sid && subSessions.has(sid)) return
+      if (sid && subSessions.has(sid) && !cfg.childEvents?.includes(event.type)) return
       if (shouldPlay(event.type)) play(event.type)
     },
     tool: {
