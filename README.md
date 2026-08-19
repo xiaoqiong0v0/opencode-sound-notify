@@ -65,7 +65,7 @@ npm install @xiaoqiong0v0/opencode-sound-notify
 | 事件 | 内置文件 | 音效 |
 |------|----------|------|
 | `session.idle` | `assets/default.wav` | 默认 |
-| `session.error` | `assets/error.wav` | 短促蜂鸣 |
+| `session.error` | `assets/session.error.wav` | 短促蜂鸣 |
 | `permission.asked` | `assets/permission.asked.wav` | 双音提醒 |
 
 ## 支持的事件
