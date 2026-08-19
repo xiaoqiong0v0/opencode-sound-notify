@@ -14,6 +14,13 @@ const __dirname = dirname(__filename)
 const ASSET_DIR = join(__dirname, "..", "assets")
 const DEFAULT_SOUND = join(ASSET_DIR, "default.wav")
 
+// 事件 → 内置音频文件映射
+const BUILTIN_SOUNDS: Record<string, string> = {
+  "session.idle": "default.wav",
+  "session.error": "session.error.wav",
+  "permission.asked": "permission.asked.wav",
+}
+
 const log: Logger = createLogger("sound-notify")
 
 const SAMPLE_CFG = `{
@@ -146,7 +153,8 @@ function resolveSound(eventType: string): string {
   const custom = cfg.sounds?.[eventType]
   if (custom && existsSync(custom)) return custom
   if (cfg.sound && existsSync(cfg.sound)) return cfg.sound
-  const builtin = join(ASSET_DIR, `${eventType === "session.idle" ? "default" : eventType.replace("session.", "")}.wav`)
+  const file = BUILTIN_SOUNDS[eventType] || `${eventType}.wav`
+  const builtin = join(ASSET_DIR, file)
   if (existsSync(builtin)) return builtin
   return DEFAULT_SOUND
 }
