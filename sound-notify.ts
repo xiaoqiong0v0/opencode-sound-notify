@@ -21,6 +21,9 @@ const BUILTIN_SOUNDS: Record<string, string> = {
   "permission.asked": "permission.asked.wav",
 }
 
+// Termux 默认前缀目录
+const TERMUX_PREFIX = "/data/data/com.termux/files/usr"
+
 const log: Logger = createLogger("sound-notify")
 
 const SAMPLE_CFG = `{
@@ -44,6 +47,8 @@ const SAMPLE_CFG = `{
   },
   // 子任务(sub-session)中仍触发提示音的事件列表，默认仅权限请求
   "childEvents": ["permission.asked"],
+  // Termux 音频流类型，仅 Termux 生效（media/alarm/notification/ring/system/voice）
+  "streamType": "media",
   // 语言: "zh" 或 "en"
   "lang": "en",
   // 是否启用
@@ -59,6 +64,7 @@ interface Cfg {
   defaultDebounceMs?: number
   debounceMs?: Record<string, number>
   childEvents?: string[]
+  streamType?: string
   enabled?: boolean
 }
 
@@ -81,6 +87,7 @@ const TX: Record<string, TxEntry> = {
   mute_save:             { zh: "save=true 同时写入配置文件持久化", en: "save=true also persist to config file" },
   save_ok:               { zh: "已保存到配置文件 {path}", en: "Saved to config {path}" },
   save_fail:             { zh: "保存失败: {msg}", en: "Save failed: {msg}" },
+  termux_no_player:      { zh: "Termux 未找到 play-audio，请先执行: pkg install play-audio", en: "play-audio not found in Termux, install it: pkg install play-audio" },
 }
 
 const T = (key: string, params?: Record<string, string>): string => {
@@ -112,6 +119,7 @@ function loadCfg(): void {
     defaultDebounceMs: (raw.defaultDebounceMs as number) || 30000,
     debounceMs: raw.debounceMs as Record<string, number> | undefined,
     childEvents: (raw.childEvents as string[]) || ["permission.asked"],
+    streamType: (raw.streamType as string) || "media",
     enabled: raw.enabled !== false,
   }
   LANG = (raw.lang as string) === "zh" ? "zh" : "en"
@@ -132,7 +140,27 @@ const eventTimestamps = new Map<string, number>()
 const subSessions = new Set<string>()
 let globalLastPlay = 0
 
+// 判断是否运行在 Termux(Android) 环境
+function isTermux(): boolean {
+  return process.platform === "android"
+    || !!process.env.TERMUX_VERSION
+    || (process.env.PREFIX || "").includes("com.termux")
+}
+
+// 查找 Termux 内的命令绝对路径，找不到返回 null
+function findTermuxBin(name: string): string | null {
+  const prefix = process.env.PREFIX || TERMUX_PREFIX
+  const p = join(prefix, "bin", name)
+  return existsSync(p) ? p : null
+}
+
 function getPlayerArgs(sound: string): string[] | null {
+  if (isTermux()) {
+    const player = findTermuxBin("play-audio")
+    if (!player) return null
+    const streamArgs = cfg.streamType ? ["-s", cfg.streamType] : []
+    return [player, ...streamArgs, sound]
+  }
   switch (process.platform) {
     case "win32":
       return ["powershell", "-NoProfile", "-Command",
@@ -167,7 +195,7 @@ function play(eventType: string): Promise<boolean> {
   }
   const args = getPlayerArgs(path)
   if (!args) {
-    log.error(T("unsupported_platform", { platform: process.platform }))
+    log.error(isTermux() ? T("termux_no_player") : T("unsupported_platform", { platform: process.platform }))
     return Promise.resolve(false)
   }
   const [cmd, ...cmdArgs] = args

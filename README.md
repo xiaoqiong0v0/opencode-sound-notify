@@ -41,6 +41,8 @@ npm install @xiaoqiong0v0/opencode-sound-notify
   },
   // 子任务(sub-session)中仍触发提示音的事件列表，默认仅权限请求
   "childEvents": ["permission.asked"],
+  // Termux 音频流类型，仅 Termux 生效（media/alarm/notification/ring/system/voice）
+  "streamType": "media",
   // 语言: "zh" 或 "en"
   "lang": "en",
   // 是否启用
@@ -57,6 +59,7 @@ npm install @xiaoqiong0v0/opencode-sound-notify
 | `minIntervalMs` | `3000` | 全局最小间隔，所有声音不能小于此值，设为 0 关闭 |
 | `debounceMs` | `{}` | 按事件单独配置，key=事件名，value=防抖间隔(ms) |
 | `childEvents` | `["permission.asked"]` | 子任务中仍触发提示音的事件列表，其他事件静默 |
+| `streamType` | `"media"` | Termux 音频流类型，仅 Termux 生效 |
 | `lang` | `"en"` | 语言设置 |
 | `enabled` | `true` | 总开关 |
 
@@ -94,3 +97,12 @@ npm install @xiaoqiong0v0/opencode-sound-notify
 | Windows | PowerShell SoundPlayer |
 | macOS | `afplay` |
 | Linux | `paplay` (PulseAudio) / `aplay` (ALSA) |
+| Termux (Android) | play-audio（OpenSL ES，需 pkg install play-audio） |
+
+### Termux (Android)
+
+```bash
+pkg install play-audio
+```
+
+Termux 上通过 `play-audio`(OpenSL ES) 播放，默认走 `media` 音频流（可用 `streamType` 切换）。若无声，请检查手机对应音频流的音量（如媒体音量）。
