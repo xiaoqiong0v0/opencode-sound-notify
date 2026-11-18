@@ -140,6 +140,43 @@ const eventTimestamps = new Map<string, number>()
 const subSessions = new Set<string>()
 let globalLastPlay = 0
 
+// idle 提示音延迟(ms)：延迟期内若出现新输入则取消播放
+const IDLE_DELAY_MS = 500
+let idleTimer: ReturnType<typeof setTimeout> | null = null
+let idleSessionId: string | undefined
+
+// 取消待播放的 idle 提示音
+function cancelIdle(): void {
+  if (idleTimer) {
+    clearTimeout(idleTimer)
+    idleTimer = null
+  }
+}
+
+// 延迟播放 idle 提示音，等待期间可被新输入取消
+function scheduleIdle(sid: string | undefined): void {
+  cancelIdle()
+  idleSessionId = sid
+  idleTimer = setTimeout(() => {
+    idleTimer = null
+    if (shouldPlay("session.idle")) play("session.idle")
+  }, IDLE_DELAY_MS)
+}
+
+// 判断事件是否表示同一会话出现新的用户输入/活动
+function isNewInput(type: string, properties: Record<string, unknown> | undefined, sid: string | undefined): boolean {
+  if (!idleTimer || sid !== idleSessionId) return false
+  if (type === "session.status") {
+    const status = properties?.status as { type?: string } | undefined
+    return status?.type === "busy"
+  }
+  if (type === "message.updated") {
+    const info = properties?.info as { role?: string } | undefined
+    return info?.role === "user"
+  }
+  return false
+}
+
 // 判断是否运行在 Termux(Android) 环境
 function isTermux(): boolean {
   return process.platform === "android"
@@ -251,6 +288,15 @@ export const SoundNotify = async () => {
       }
       const sid = event.properties?.sessionID as string | undefined
       if (sid && subSessions.has(sid) && !cfg.childEvents?.includes(event.type)) return
+
+      // 新输入/活动 → 取消尚未播放的 idle 提示音
+      if (isNewInput(event.type, event.properties, sid)) cancelIdle()
+
+      // idle 延迟播放，延迟期内出现新输入则不响
+      if (event.type === "session.idle") {
+        scheduleIdle(sid)
+        return
+      }
       if (shouldPlay(event.type)) play(event.type)
     },
     tool: {
