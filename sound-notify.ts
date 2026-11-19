@@ -144,6 +144,8 @@ let globalLastPlay = 0
 const IDLE_DELAY_MS = 500
 let idleTimer: ReturnType<typeof setTimeout> | null = null
 let idleSessionId: string | undefined
+let idleUserId: string | undefined
+let lastUserId: string | undefined
 
 // 取消待播放的 idle 提示音
 function cancelIdle(): void {
@@ -157,9 +159,14 @@ function cancelIdle(): void {
 function scheduleIdle(sid: string | undefined): void {
   cancelIdle()
   idleSessionId = sid
+  idleUserId = lastUserId
   idleTimer = setTimeout(() => {
     idleTimer = null
-    if (shouldPlay("session.idle")) play("session.idle")
+    if (shouldPlay("session.idle")) {
+      play("session.idle")
+    } else {
+      log.info(`idle skipped: ${blockReason("session.idle")}`)
+    }
   }, IDLE_DELAY_MS)
 }
 
@@ -171,8 +178,9 @@ function isNewInput(type: string, properties: Record<string, unknown> | undefine
     return status?.type === "busy"
   }
   if (type === "message.updated") {
-    const info = properties?.info as { role?: string } | undefined
-    return info?.role === "user"
+    const info = properties?.info as { role?: string; id?: string } | undefined
+    // 仅当出现“新的用户消息”才算新输入；旧消息的重复推送不算
+    return info?.role === "user" && !!idleUserId && !!info.id && info.id !== idleUserId
   }
   return false
 }
@@ -243,10 +251,11 @@ function play(eventType: string): Promise<boolean> {
   })
 }
 
-function shouldPlay(eventType: string): boolean {
-  if (muted) return false
-  if (!cfg.enabled) return false
-  if (!cfg.events?.includes(eventType)) return false
+// 返回播放被拦截的原因，null 表示允许播放
+function blockReason(eventType: string): string | null {
+  if (muted) return "muted"
+  if (!cfg.enabled) return "disabled"
+  if (!cfg.events?.includes(eventType)) return "not-in-events"
 
   const now = Date.now()
   const minMs = cfg.minIntervalMs || 0
@@ -254,10 +263,16 @@ function shouldPlay(eventType: string): boolean {
   const effective = minMs > debounceMs ? minMs : debounceMs
 
   // 全局间隔检查：任何声音播放后 minIntervalMs 内都不再响应
-  if (minMs > 0 && now - globalLastPlay < minMs) return false
+  if (minMs > 0 && now - globalLastPlay < minMs) return `global-interval(${now - globalLastPlay}<${minMs})`
 
   const last = eventTimestamps.get(eventType) || 0
-  if (now - last < effective) return false
+  if (now - last < effective) return `debounce(${now - last}<${effective})`
+  return null
+}
+
+function shouldPlay(eventType: string): boolean {
+  if (blockReason(eventType)) return false
+  const now = Date.now()
   eventTimestamps.set(eventType, now)
   globalLastPlay = now
   return true
@@ -289,8 +304,17 @@ export const SoundNotify = async () => {
       const sid = event.properties?.sessionID as string | undefined
       if (sid && subSessions.has(sid) && !cfg.childEvents?.includes(event.type)) return
 
+      // 记录最新的用户消息 id，用于区分“新消息”与“旧消息的重复推送”
+      if (event.type === "message.updated") {
+        const info = event.properties?.info as { role?: string; id?: string } | undefined
+        if (info?.role === "user" && info.id) lastUserId = info.id
+      }
+
       // 新输入/活动 → 取消尚未播放的 idle 提示音
-      if (isNewInput(event.type, event.properties, sid)) cancelIdle()
+      if (isNewInput(event.type, event.properties, sid)) {
+        log.info(`idle canceled by ${event.type}`)
+        cancelIdle()
+      }
 
       // idle 延迟播放，延迟期内出现新输入则不响
       if (event.type === "session.idle") {
